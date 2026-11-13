@@ -61,7 +61,7 @@ export default async function CaseDetailPage({ params }: PageProps) {
   }
 
   const { person, sightings } = data
-  const photoUrl = person.photos?.[0] || '/placeholder-person.jpg'
+  const photoUrl = person.photos?.[0] || '/placeholder.jpg'
   const daysMissing = person.last_seen_date
     ? Math.floor((Date.now() - new Date(person.last_seen_date).getTime()) / (1000 * 60 * 60 * 24))
     : null

@@ -19,7 +19,7 @@ import {
 } from '@/components/ui/select'
 import { toast } from 'sonner'
 import { KENYA_COUNTIES } from '@/lib/types'
-import { Loader2, ArrowLeft, ArrowRight, Check, User, MapPin, FileText, Phone } from 'lucide-react'
+import { Loader2, ArrowLeft, ArrowRight, Check, User, MapPin, FileText, Phone, ImagePlus } from 'lucide-react'
 
 const STEPS = [
   { id: 1, name: 'Basic Info', icon: User },
@@ -46,13 +46,14 @@ export default function ReportPage() {
     clothing_description: '',
     distinguishing_marks: '',
     ob_number: '',
+    photo: null as File | null,
     // Contact
     reporter_name: '',
     reporter_phone: '',
     reporter_email: '',
   })
 
-  const updateField = (field: string, value: string) => {
+  function updateField<K extends keyof typeof formData>(field: K, value: (typeof formData)[K]) {
     setFormData(prev => ({ ...prev, [field]: value }))
   }
 
@@ -99,6 +100,26 @@ export default function ReportPage() {
 
     try {
       const supabase = createClient()
+      let photoUrl: string | null = null
+
+      if (formData.photo) {
+        const fileExtension = formData.photo.name.split('.').pop()?.toLowerCase() || 'jpg'
+        const filePath = `${crypto.randomUUID()}.${fileExtension}`
+        const { error: uploadError } = await supabase.storage
+          .from('missing-person-photos')
+          .upload(filePath, formData.photo, {
+            cacheControl: '3600',
+            contentType: formData.photo.type,
+            upsert: false,
+          })
+
+        if (uploadError) throw uploadError
+
+        const { data: publicUrlData } = supabase.storage
+          .from('missing-person-photos')
+          .getPublicUrl(filePath)
+        photoUrl = publicUrlData.publicUrl
+      }
       
       const { error } = await supabase
         .from('missing_persons')
@@ -117,6 +138,7 @@ export default function ReportPage() {
           reporter_name: formData.reporter_name,
           reporter_phone: formData.reporter_phone,
           reporter_email: formData.reporter_email || null,
+          photos: photoUrl ? [photoUrl] : [],
           status: 'active',
           is_verified: false,
           is_sensitive: false,
@@ -128,7 +150,11 @@ export default function ReportPage() {
       router.push('/report/success')
     } catch (error) {
       console.error('Error submitting report:', error)
-      toast.error('Failed to submit report. Please try again.')
+      const message =
+        error && typeof error === 'object' && 'message' in error
+          ? String(error.message)
+          : 'Please try again.'
+      toast.error(`Failed to submit report: ${message}`)
     } finally {
       setIsSubmitting(false)
     }
@@ -326,6 +352,30 @@ export default function ReportPage() {
                       value={formData.ob_number}
                       onChange={(e) => updateField('ob_number', e.target.value)}
                     />
+                  </div>
+                  <div>
+                    <Label htmlFor="photo">Photo of Missing Person</Label>
+                    <div className="mt-2 flex items-center gap-3">
+                      <ImagePlus className="h-5 w-5 shrink-0 text-muted-foreground" />
+                      <Input
+                        id="photo"
+                        type="file"
+                        accept="image/jpeg,image/png,image/webp"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0] || null
+                          if (file && file.size > 5 * 1024 * 1024) {
+                            e.target.value = ''
+                            updateField('photo', null)
+                            toast.error('Photo must be 5 MB or smaller')
+                            return
+                          }
+                          updateField('photo', file)
+                        }}
+                      />
+                    </div>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      Optional. JPG, PNG, or WebP up to 5 MB.
+                    </p>
                   </div>
                 </>
               )}

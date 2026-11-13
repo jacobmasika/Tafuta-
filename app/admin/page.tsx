@@ -12,17 +12,19 @@ import type { MissingPerson, Sighting } from '@/lib/types'
 async function getAdminData() {
   const supabase = await createClient()
   
-  // Fetch all cases (including unverified)
-  const { data: cases } = await supabase
+  const { data: cases, error: casesError } = await supabase
     .from('missing_persons')
     .select('*')
     .order('created_at', { ascending: false })
 
-  // Fetch all sightings
-  const { data: sightings } = await supabase
+  if (casesError) throw new Error(`Unable to load cases: ${casesError.message}`)
+
+  const { data: sightings, error: sightingsError } = await supabase
     .from('sightings')
     .select('*, missing_persons(full_name, reference_no)')
     .order('created_at', { ascending: false })
+
+  if (sightingsError) throw new Error(`Unable to load sightings: ${sightingsError.message}`)
 
   return {
     cases: (cases || []) as MissingPerson[],
